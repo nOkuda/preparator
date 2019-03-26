@@ -7,10 +7,13 @@
   </head>
   <body>
     <div id="inputDiv">
-      <input type="file" id="toBeConverted" onchange="convertFile(this.files)">
+      <input type="file" id="toBeConverted" onchange="loadAndConvertFile(this.files)">
     </div>
     <div id="displayDiv">
       <textarea id="display"></textarea>
+    </div>
+    <div id="saveDiv">
+      <button type="button" onclick="saveDoc()">Save</button>
     </div>
   </body>
 </html>
