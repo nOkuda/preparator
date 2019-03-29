@@ -1,3 +1,5 @@
+import React from 'react';
+
 function convertText(text) {
   // TODO perform conversion
   return text;
@@ -71,9 +73,4 @@ class Preparator extends React.Component {
   }
 }
 
-const element = <Preparator />;
-
-ReactDOM.render(
-  element,
-  document.getElementById("tesseraePreparator")
-);
+export default Preparator;
