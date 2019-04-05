@@ -1,7 +1,8 @@
 {
-  "depdendencies": {
+  "dependencies": {
     "react": "^16.8.5",
     "react-dom": "^16.8.5",
+    "fast-xml-parser": "^3.12.16",
     "source-map-support": "^0.5.11"
   },
   "devDependencies": {
