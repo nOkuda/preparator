@@ -1,5 +1,28 @@
 import React from 'react';
 import fxp from 'fast-xml-parser';
+import he from 'he';
+
+// TODO implement findNodes to match Perl script?
+function findNode(parsedObj, nodeName) {
+  if (parsedObj.hasOwnProperty(nodeName)) {
+    return parsedObj[nodeName];
+  }
+  for (let child in parsedObj) {
+    let found = findNode(parsedObj[child], nodeName);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function getTitle(parsedObj) {
+  for (const text of parsedObj['TEI.2']['teiHeader']['fileDesc']['titleStmt']['title']) {
+    if (text) {
+      return text;
+    }
+  }
+}
 
 function convertText(text) {
   // TODO perform conversion
@@ -16,10 +39,15 @@ function convertText(text) {
   const fxpOptions = {
     attributeNamePrefix : "@_",
     attrNodeName: "attr", //default is 'false'
-    ignoreAttributes: false
+    ignoreAttributes: false,
+    tagValueProcessor: a => he.decode(a)
   };
   const parsedObj = fxp.parse(text, fxpOptions);
+  const title = getTitle(parsedObj);
+  const refStates = findNode(parsedObj, 'encodingDesc')['refsDecl']['state'].map(x => x['attr']['@_unit']);
   console.log(parsedObj);
+  console.log(title);
+  console.log(refStates);
   // TODO Idea:  try replacing all bad stuff before parsing with DOM (regex)
   // TODO Idea:  build validating xml parser that downloads external DTDs
   // (sax-js)
