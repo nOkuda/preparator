@@ -1,5 +1,5 @@
 import React from 'react';
-import fxp from 'fast-xml-parser';
+import xml2js from 'xml2js';
 import he from 'he';
 
 // TODO implement findNodes to match Perl script?
@@ -26,28 +26,8 @@ function getTitle(parsedObj) {
 
 function convertText(text) {
   // TODO perform conversion
-  /*
-  const parser = new DOMParser();
-  const dom = parser.parseFromString(text, 'application/xml');
-  console.log(dom.doctype);
-  console.log(Array.from(dom.firstElementChild.children).map(x => x.localName));
-  console.log(dom.firstElementChild.firstElementChild.innerHTML);
-  return Array.from(dom.children).map(x => x.localName).join('\n');
-  */
   // TODO Idea:  use loose xml parser and correct bad stuff afterwards
   // (fast-xmlparser? xml2js?)
-  const fxpOptions = {
-    attributeNamePrefix : "@_",
-    attrNodeName: "attr", //default is 'false'
-    ignoreAttributes: false,
-    tagValueProcessor: a => he.decode(a)
-  };
-  const parsedObj = fxp.parse(text, fxpOptions);
-  const title = getTitle(parsedObj);
-  const refStates = findNode(parsedObj, 'encodingDesc')['refsDecl']['state'].map(x => x['attr']['@_unit']);
-  console.log(parsedObj);
-  console.log(title);
-  console.log(refStates);
   // TODO Idea:  try replacing all bad stuff before parsing with DOM (regex)
   // TODO Idea:  build validating xml parser that downloads external DTDs
   // (sax-js)
@@ -67,6 +47,7 @@ class Preparator extends React.Component {
 
     this.loadAndConvertFile = this.loadAndConvertFile.bind(this);
     this.postprocess = this.postprocess.bind(this);
+    this.xmlParserCallback = this.xmlParserCallback.bind(this);
     this.updateText = this.updateText.bind(this);
     this.saveDoc = this.saveDoc.bind(this);
 
@@ -81,8 +62,20 @@ class Preparator extends React.Component {
   }
 
   postprocess(e) {
-    this.setState({text: convertText(e.target.result)});
+    const parserOptions = {
+      // tag names come out all uppercase because sax-js does so in loose mode
+      strict: false,
+      explicitChildren: true,
+      preserveChildrenOrder: true
+    };
+    let parser = new xml2js.Parser(parserOptions);
+    parser.parseString(e.target.result, this.xmlParserCallback);
   }
+
+  xmlParserCallback(err, result) {
+    console.log(result);
+    this.setState({text: result['TEI.2']['#name']});
+  };
 
   updateText(event) {
     this.setState({text: event.target.value});
