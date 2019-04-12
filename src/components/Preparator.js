@@ -1,27 +1,42 @@
 import React from 'react';
-import xml2js from 'xml2js';
+import parseXml from '@rgrove/parse-xml';
 import he from 'he';
 
-// TODO implement findNodes to match Perl script?
-function findNode(parsedObj, nodeName) {
-  if (parsedObj.hasOwnProperty(nodeName)) {
-    return parsedObj[nodeName];
-  }
-  for (let child in parsedObj) {
-    let found = findNode(parsedObj[child], nodeName);
-    if (found) {
-      return found;
+function traversePath(parsedObj, path) {
+  // grabs objects specified by path
+  //
+  // if not object is specified by the path, an empty list is returned
+  //
+  // if multiple objects could be referenced by the given path, they will all
+  // be given
+  //
+  // path should be a list of strings
+  let result = [];
+  const relevantChildren = parsedObj['children'].filter(x => x.type === 'element' && x.name === path[0]);
+  if (path.length > 1) {
+    for (const child of relevantChildren) {
+      result = result.concat(traversePath(child, path.slice(1)));
     }
   }
-  return null;
+  else if (path.length === 1) {
+    return relevantChildren;
+  }
+  return result;
 }
 
 function getTitle(parsedObj) {
-  for (const text of parsedObj['TEI.2']['TEIHEADER'][0]['FILEDESC'][0]['TITLESTMT'][0]['TITLE']) {
-    if (text) {
-      return text;
+  const path = ['TEI.2', 'teiHeader', 'fileDesc', 'titleStmt', 'title'];
+  for (const titleNode of traversePath(parsedObj, path)) {
+    if (titleNode['children'][0].hasOwnProperty('text')) {
+      return titleNode['children'][0]['text'];
     }
   }
+}
+
+function getStructures(parsedObj) {
+  const path = ['TEI.2', 'teiHeader', 'encodingDesc', 'refsDecl'];
+  const rawStructures = traversePath(parsedObj, path);
+  return rawStructures.map(x => x['children'].map(y => y['attributes']['unit']));
 }
 
 function destroyClickedElement(event)
@@ -36,7 +51,6 @@ class Preparator extends React.Component {
 
     this.loadAndConvertFile = this.loadAndConvertFile.bind(this);
     this.postprocess = this.postprocess.bind(this);
-    this.xmlParserCallback = this.xmlParserCallback.bind(this);
     this.updateText = this.updateText.bind(this);
     this.saveDoc = this.saveDoc.bind(this);
 
@@ -52,19 +66,15 @@ class Preparator extends React.Component {
 
   postprocess(e) {
     const parserOptions = {
-      // tag names come out all uppercase because sax-js does so in loose mode
-      strict: false,
-      explicitChildren: true,
-      preserveChildrenOrder: true
+      ignoreUndefinedEntities: true
     };
-    let parser = new xml2js.Parser(parserOptions);
-    parser.parseString(e.target.result, this.xmlParserCallback);
+    // parse-xml retained inter-tag newlines as text nodes
+    let newlinesRemoved = e.target.result.replace(/>\s+</gm, '><');
+    let parsedObj = parseXml(newlinesRemoved, parserOptions);
+    console.log(parsedObj);
+    console.log(getStructures(parsedObj));
+    this.setState({text: getTitle(parsedObj)});
   }
-
-  xmlParserCallback(err, result) {
-    console.log(result);
-    this.setState({text: getTitle(result)});
-  };
 
   updateText(event) {
     this.setState({text: event.target.value});
