@@ -17,22 +17,11 @@ function findNode(parsedObj, nodeName) {
 }
 
 function getTitle(parsedObj) {
-  for (const text of parsedObj['TEI.2']['teiHeader']['fileDesc']['titleStmt']['title']) {
+  for (const text of parsedObj['TEI.2']['TEIHEADER'][0]['FILEDESC'][0]['TITLESTMT'][0]['TITLE']) {
     if (text) {
       return text;
     }
   }
-}
-
-function convertText(text) {
-  // TODO perform conversion
-  // TODO Idea:  use loose xml parser and correct bad stuff afterwards
-  // (fast-xmlparser? xml2js?)
-  // TODO Idea:  try replacing all bad stuff before parsing with DOM (regex)
-  // TODO Idea:  build validating xml parser that downloads external DTDs
-  // (sax-js)
-  // TODO firefox refuses to finish parsing once it finds the first error;
-  // chrome parses along anyway; DTD problem?
 }
 
 function destroyClickedElement(event)
@@ -74,7 +63,7 @@ class Preparator extends React.Component {
 
   xmlParserCallback(err, result) {
     console.log(result);
-    this.setState({text: result['TEI.2']['#name']});
+    this.setState({text: getTitle(result)});
   };
 
   updateText(event) {
