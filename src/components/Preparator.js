@@ -36,7 +36,33 @@ function getTitle(parsedObj) {
 function getStructures(parsedObj) {
   const path = ['TEI.2', 'teiHeader', 'encodingDesc', 'refsDecl'];
   const rawStructures = traversePath(parsedObj, path);
-  return rawStructures.map(x => x['children'].map(y => y['attributes']['unit']));
+  let units = [];
+  for (const raw of rawStructures) {
+    const states = traversePath(raw, ['state']);
+    if (states) {
+      units = units.concat([states.map(x => x['attributes']['unit'])]);
+    } else {
+      const steps = traversePath(raw, ['step']);
+      units = units.concat([steps.map(x => x['attributes']['refunit'])]);
+    }
+  }
+  return units;
+}
+
+function getTexts(parsedObj) {
+  let result = [];
+  if (parsedObj.hasOwnProperty('children')) {
+    for (const child of parsedObj['children']) {
+      if (child.type === 'element' && child.name === 'text') {
+        result = result.concat(child);
+      }
+      let deeperTexts = getTexts(child);
+      if (deeperTexts) {
+        result = result.concat(deeperTexts)
+      }
+    }
+  }
+  return result
 }
 
 function destroyClickedElement(event)
@@ -73,6 +99,7 @@ class Preparator extends React.Component {
     let parsedObj = parseXml(newlinesRemoved, parserOptions);
     console.log(parsedObj);
     console.log(getStructures(parsedObj));
+    console.log(getTexts(parsedObj));
     this.setState({text: getTitle(parsedObj)});
   }
 
