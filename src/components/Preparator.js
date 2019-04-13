@@ -73,38 +73,57 @@ function destroyClickedElement(event)
 class Preparator extends React.Component {
   constructor(props) {
     super(props);
-    this.state = {text: ''};
+    this.state = {
+      tessContents: '',
+      presumedStructure: '',
+      textName: ''
+    };
 
-    this.loadAndConvertFile = this.loadAndConvertFile.bind(this);
-    this.postprocess = this.postprocess.bind(this);
-    this.updateText = this.updateText.bind(this);
+    this.loadFile = this.loadFile.bind(this);
+    this.postLoad = this.postLoad.bind(this);
+    this.updateTessContents = this.updateTessContents.bind(this);
+    this.updateTextName = this.updateTextName.bind(this);
     this.saveDoc = this.saveDoc.bind(this);
 
     this.fileInput = React.createRef();
   }
 
-  loadAndConvertFile() {
+  loadFile() {
     const file = this.fileInput.current.files[0];
     const reader = new FileReader();
-    reader.onload = this.postprocess;
+    reader.onload = this.postLoad;
     reader.readAsText(file);
   }
 
-  postprocess(e) {
+  postLoad(e) {
     const parserOptions = {
       ignoreUndefinedEntities: true
     };
     // parse-xml retained inter-tag newlines as text nodes
     let newlinesRemoved = e.target.result.replace(/>\s+</gm, '><');
     let parsedObj = parseXml(newlinesRemoved, parserOptions);
-    console.log(parsedObj);
-    console.log(getStructures(parsedObj));
-    console.log(getTexts(parsedObj));
-    this.setState({text: getTitle(parsedObj)});
+    let structures = getStructures(parsedObj);
+    this.setState({
+      parsedObj: parsedObj,
+      title: getTitle(parsedObj),
+      texts: getTexts(parsedObj),
+      structures: structures,
+      presumedStructure: structures[0],
+      tessContents: 'loaded'
+    });
+    console.log(this.state);
   }
 
-  updateText(event) {
-    this.setState({text: event.target.value});
+  updateTessContents(event) {
+    this.setState({tessContents: event.target.value});
+  }
+
+  updateTextName(event) {
+    this.setState({textName: event.target.value});
+  }
+
+  updatePresumedStructure(event) {
+    this.setState({presumedStructure: event.target.value});
   }
 
   saveDoc() {
@@ -135,8 +154,18 @@ class Preparator extends React.Component {
 
   render() {
     return [
-      <div key="inputDiv"><input type="file" id="toBeConverted" ref={this.fileInput} onChange={this.loadAndConvertFile} /></div>,
-      <div key="displayDiv"><textarea id="display" value={this.state.text} onChange={this.updateText}/></div>,
+      <div key="inputDiv"><input type="file" id="toBeConverted" ref={this.fileInput} onChange={this.loadFile} /></div>,
+      <div key="optionsDiv">
+        <div>
+          <label htmlFor="textName">Text Name:</label>
+          <input type="text" id="textName" value={this.state.textName} onChange={this.updateTextName} />
+        </div>
+          <label htmlFor="presumedStructure">Presumed Structure:</label>
+          <input type="text" id="presumedStructure" value={this.state.presumedStructure} onChange={this.updatePresumedStructure} />
+        <div>
+        </div>
+      </div>,
+      <div key="displayDiv"><textarea id="display" value={this.state.tessContents} onChange={this.updateTessContents}/></div>,
       <div key="saveDiv"><button type="button" onClick={this.saveDoc}>Save</button></div>
     ];
   }
