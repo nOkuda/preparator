@@ -65,6 +65,50 @@ function getTexts(parsedObj) {
   return result
 }
 
+function getLevelsInfo(text, presumedStructure) {
+  let levels = {};
+  for (const structure of presumedStructure) {
+    levels[structure] = null;
+  }
+  let remaining = [text];
+  while (remaining.length > 0) {
+    const curNode = remaining.shift();
+    const levelsRemaining = Object.getOwnPropertyNames(levels).filter(x => levels[x] === null);
+    if (levelsRemaining.length > 0) {
+      for (const levelName of levelsRemaining) {
+        if (levelName.toLowerCase() === 'line' && (curNode['name'] === 'l' || curNode['name'] === 'lb')) {
+          levels[levelName] = {
+            'name': curNode['name'],
+            'attrName': null
+          }
+          break;
+        }
+        for (const attrName of ['type', 'unit']) {
+          if (curNode.hasOwnProperty('attributes')) {
+            const curNodeAttrs = curNode['attributes'];
+            if (attrName in curNodeAttrs && curNodeAttrs[attrName].toLowerCase() === levelName) {
+              levels[levelName] = {
+                'name': curNode['name'],
+                'attrName': attrName
+              };
+              break;
+            }
+          }
+         }
+      }
+      if (curNode.hasOwnProperty('children')) {
+        for (const child of curNode['children'].filter(x => x['type'] === 'element')) {
+          remaining.push(child);
+        }
+      }
+    } else {
+      break;
+    }
+  }
+  console.log(levels);
+  return levels;
+}
+
 function destroyClickedElement(event)
 {
   document.body.removeChild(event.target);
@@ -75,7 +119,7 @@ class Preparator extends React.Component {
     super(props);
     this.state = {
       tessContents: '',
-      presumedStructure: '',
+      presumedStructureDisplay: '',
       textName: ''
     };
 
@@ -83,6 +127,8 @@ class Preparator extends React.Component {
     this.postLoad = this.postLoad.bind(this);
     this.updateTessContents = this.updateTessContents.bind(this);
     this.updateTextName = this.updateTextName.bind(this);
+    this.updatePresumedStructure = this.updatePresumedStructure.bind(this);
+    this.convert = this.convert.bind(this);
     this.saveDoc = this.saveDoc.bind(this);
 
     this.fileInput = React.createRef();
@@ -108,8 +154,7 @@ class Preparator extends React.Component {
       title: getTitle(parsedObj),
       texts: getTexts(parsedObj),
       structures: structures,
-      presumedStructure: structures[0],
-      tessContents: 'loaded'
+      presumedStructureDisplay: structures[0].join('.')
     });
     console.log(this.state);
   }
@@ -123,7 +168,17 @@ class Preparator extends React.Component {
   }
 
   updatePresumedStructure(event) {
-    this.setState({presumedStructure: event.target.value});
+    this.setState({
+      presumedStructureDisplay: event.target.value
+    });
+  }
+
+  convert() {
+    //
+    for (const text of this.state.texts) {
+      const levelsInfo = getLevelsInfo(text, this.state.presumedStructureDisplay.split('.'));
+    }
+    this.setState({tessContents: 'loaded'});
   }
 
   saveDoc() {
@@ -161,11 +216,14 @@ class Preparator extends React.Component {
           <input type="text" id="textName" value={this.state.textName} onChange={this.updateTextName} />
         </div>
           <label htmlFor="presumedStructure">Presumed Structure:</label>
-          <input type="text" id="presumedStructure" value={this.state.presumedStructure} onChange={this.updatePresumedStructure} />
+          <input type="text" id="presumedStructure" value={this.state.presumedStructureDisplay} onChange={this.updatePresumedStructure} />
         <div>
+          <input type="button" id="convertButton" onClick={this.convert} value="Convert" />
         </div>
       </div>,
-      <div key="displayDiv"><textarea id="display" value={this.state.tessContents} onChange={this.updateTessContents}/></div>,
+      <div key="displayDiv">
+        <textarea id="display" value={this.state.tessContents} onChange={this.updateTessContents}/>
+      </div>,
       <div key="saveDiv"><button type="button" onClick={this.saveDoc}>Save</button></div>
     ];
   }
