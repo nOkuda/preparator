@@ -49,6 +49,12 @@ function getStructures(parsedObj) {
   return units;
 }
 
+function getPrimaryLanguage(parsedObj) {
+  const path = ['TEI.2', 'teiHeader', 'profileDesc', 'langUsage']
+  console.log(traversePath(parsedObj, path));
+  return traversePath(parsedObj, path)[0]['attributes']['id'];
+}
+
 function getTexts(parsedObj) {
   let result = [];
   if (parsedObj.hasOwnProperty('children')) {
@@ -75,8 +81,9 @@ function getLevelsInfo(text, presumedStructure) {
     const curNode = remaining.shift();
     const levelsRemaining = Object.getOwnPropertyNames(levels).filter(x => levels[x] === null);
     if (levelsRemaining.length > 0) {
-      for (const levelName of levelsRemaining) {
-        if (levelName.toLowerCase() === 'line' && (curNode['name'] === 'l' || curNode['name'] === 'lb')) {
+      for (const tmpName of levelsRemaining) {
+        const levelName = tmpName.toLowerCase();
+        if (levelName === 'line' && (curNode['name'] === 'l' || curNode['name'] === 'lb')) {
           levels[levelName] = {
             'name': curNode['name'],
             'attrName': null
@@ -94,7 +101,7 @@ function getLevelsInfo(text, presumedStructure) {
               break;
             }
           }
-         }
+        }
       }
       if (curNode.hasOwnProperty('children')) {
         for (const child of curNode['children'].filter(x => x['type'] === 'element')) {
@@ -107,6 +114,83 @@ function getLevelsInfo(text, presumedStructure) {
   }
   console.log(levels);
   return levels;
+}
+
+function extractTextData(node, isGreek) {
+  // breadth first search
+  let result = [];
+  let workqueue = [node];
+  while(workqueue.length > 0) {
+    let curNode = workqueue.shift();
+    if (curNode.hasOwnProperty('type') && curNode['type'] === 'text') {
+      // TODO fix based on whether the work is Greek or not
+      result.push(curNode['text'].trim());
+    }
+    if (curNode.hasOwnProperty('children')) {
+      for (const child of curNode['children']) {
+        workqueue.push(child);
+      }
+    }
+  }
+  return result.join(' ');
+}
+
+function tessify(text, tagName, levelsInfo, presumedStructure, isGreek) {
+  // assumed:  the keys of levelsInfo are all lowercased
+  // assumed:  the strings in presumedStructure are already lowercased
+  let levelPosition = 0;
+  let workStack = [text];
+  let result = '';
+  let foundNs = presumedStructure.map(x => 0);
+  while (workStack.length > 0) {
+    let curNode = workStack.pop();
+    if (curNode.hasOwnProperty('children')) {
+      for (const child of curNode['children'].map(x => x).reverse()) {
+        // depth first search
+        workStack.push(child);
+      }
+    }
+    if (curNode['type'] === 'element' ) {
+      let curNodeName = curNode['name'];
+      let levelName = presumedStructure[levelPosition];
+      let levelNodeName = levelsInfo[levelName]['name'];
+      let levelAttrName = levelsInfo[levelName]['attrName'];
+      if (curNodeName === levelNodeName && (levelAttrName === null || curNode['attributes'][levelAttrName].toLowerCase() === levelName)) {
+        // we've found a structure of a level to dig into
+        if (curNode.hasOwnProperty('attributes') && 'n' in curNode['attributes']) {
+          foundNs[levelPosition] = curNode['attributes']['n'];
+        } else {
+          foundNs[levelPosition] = String(Number(foundNs[levelPosition]) + 1);
+        }
+        if (levelPosition + 1 < presumedStructure.length) {
+          // let's look for the next level
+          levelPosition += 1;
+        } else {
+          // we're ready to make another line in the .tess file
+          result += '<' + tagName + ' ' + foundNs.join('.') + '>\t' + extractTextData(curNode, isGreek) + '\n';
+        }
+      } else {
+        // let's see if we've come to the next structure of any of the previous
+        // levels
+        for (let i = levelPosition - 1; i > 0; i--) {
+          let tmpLevelName = presumedStructure[i];
+          let tmpLevelNodeName = levelsInfo[tmpLevelName]['name'];
+          let tmpLevelAttrName = levelsInfo[tmpLevelName]['attrName'];
+          if (curNodeName === tmpLevelNodeName && (tmpLevelAttrName === null || curNode['attributes'][tmpLevelAttrName].toLowerCase() === tmpLevelName)) {
+            // we are at a next structure
+            levelPosition = i;
+            for (let j = i+1; j < foundNs.length; j++) {
+              // reset the counters for succeeding levels
+              // TODO there seems to be a bug in the counter reset
+              foundNs[j] = 0;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  return result;
 }
 
 function destroyClickedElement(event)
@@ -175,14 +259,19 @@ class Preparator extends React.Component {
 
   convert() {
     //
+    let finalContents = [];
+    // TODO should this be user indicated?
+    const isGreek = getPrimaryLanguage(this.state.parsedObj) === 'greek';
     for (const text of this.state.texts) {
-      const levelsInfo = getLevelsInfo(text, this.state.presumedStructureDisplay.split('.'));
+      const presumedStructure = this.state.presumedStructureDisplay.split('.');
+      const levelsInfo = getLevelsInfo(text, presumedStructure);
+      finalContents.push(tessify(text, this.state.textName, levelsInfo, presumedStructure, isGreek));
     }
-    this.setState({tessContents: 'loaded'});
+    this.setState({tessContents: finalContents.join('\n')});
   }
 
   saveDoc() {
-    const text = this.state.text;
+    const text = this.state.tessContents;
     const blob = new Blob([text], {type: 'text/plain'});
     const filename = 'default.tess';
     var downloadLink = document.createElement('a');
@@ -212,7 +301,7 @@ class Preparator extends React.Component {
       <div key="inputDiv"><input type="file" id="toBeConverted" ref={this.fileInput} onChange={this.loadFile} /></div>,
       <div key="optionsDiv">
         <div>
-          <label htmlFor="textName">Text Name:</label>
+          <label htmlFor="textName">Text Name Abbreviation:</label>
           <input type="text" id="textName" value={this.state.textName} onChange={this.updateTextName} />
         </div>
           <label htmlFor="presumedStructure">Presumed Structure:</label>
@@ -228,5 +317,7 @@ class Preparator extends React.Component {
     ];
   }
 }
+
+// TODO allow user selection of presumedStructure based on structures found
 
 export default Preparator;
