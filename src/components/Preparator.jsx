@@ -1,259 +1,16 @@
 import React from 'react';
-import parseXml from '@rgrove/parse-xml';
-import he from 'he';
-import { betaCodeToGreek } from 'beta-code-js';
-
-function getParsedObj(xmlString) {
-  const parserOptions = {
-    ignoreUndefinedEntities: true
-  };
-  // parse-xml retained inter-tag newlines as text nodes
-  let newlinesRemoved = xmlString.replace(/>\s+</gm, '><');
-  let parsedObj = parseXml(newlinesRemoved, parserOptions);
-  return parsedObj;
-}
-
-function traversePath(parsedObj, path) {
-  // grabs objects specified by path
-  //
-  // if no object is specified by the path, an empty list is returned
-  //
-  // if multiple objects could be referenced by the given path, they will all
-  // be given
-  //
-  // path should be a list of strings
-  let result = [];
-  const relevantChildren = parsedObj['children'].filter(x => x.type === 'element' && x.name === path[0]);
-  if (path.length > 1) {
-    for (const child of relevantChildren) {
-      result = result.concat(traversePath(child, path.slice(1)));
-    }
-  } else if (path.length === 1) {
-    return relevantChildren;
-  }
-  return result;
-}
-
-function getTitle(parsedObj) {
-  const path = ['TEI.2', 'teiHeader', 'fileDesc', 'titleStmt', 'title'];
-  for (const titleNode of traversePath(parsedObj, path)) {
-    if (titleNode['children'][0].hasOwnProperty('text')) {
-      return titleNode['children'][0]['text'];
-    }
-  }
-}
-
-function getStructures(parsedObj) {
-  const path = ['TEI.2', 'teiHeader', 'encodingDesc', 'refsDecl'];
-  const rawStructures = traversePath(parsedObj, path);
-  let units = [];
-  for (const raw of rawStructures) {
-    const states = traversePath(raw, ['state']);
-    if (states) {
-      units = units.concat([states.map(x => x['attributes']['unit'])]);
-    } else {
-      const steps = traversePath(raw, ['step']);
-      units = units.concat([steps.map(x => x['attributes']['refunit'])]);
-    }
-  }
-  return units;
-}
-
-function getPrimaryLanguage(parsedObj) {
-  const path = ['TEI.2', 'teiHeader', 'profileDesc', 'langUsage']
-  console.log(traversePath(parsedObj, path));
-  return traversePath(parsedObj, path)[0]['attributes']['id'];
-}
-
-function getTexts(parsedObj) {
-  let result = [];
-  if (parsedObj.hasOwnProperty('children')) {
-    for (const child of parsedObj['children']) {
-      if (child.type === 'element' && child.name === 'text') {
-        result = result.concat(child);
-      }
-      let deeperTexts = getTexts(child);
-      if (deeperTexts) {
-        result = result.concat(deeperTexts)
-      }
-    }
-  }
-  return result
-}
-
-function getLevelsInfo(text, presumedStructure) {
-  let levels = {};
-  for (const structure of presumedStructure) {
-    levels[structure] = null;
-  }
-  let remaining = [text];
-  while (remaining.length > 0) {
-    const curNode = remaining.shift();
-    const levelsRemaining = Object.getOwnPropertyNames(levels).filter(x => levels[x] === null);
-    if (levelsRemaining.length > 0) {
-      for (const tmpName of levelsRemaining) {
-        const levelName = tmpName.toLowerCase();
-        if (levelName === 'line' && (curNode['name'] === 'l' || curNode['name'] === 'lb')) {
-          levels[levelName] = {
-            'name': curNode['name'],
-            'attrName': null
-          }
-          break;
-        }
-        for (const attrName of ['type', 'unit']) {
-          if (curNode.hasOwnProperty('attributes')) {
-            const curNodeAttrs = curNode['attributes'];
-            if (attrName in curNodeAttrs && curNodeAttrs[attrName].toLowerCase() === levelName) {
-              levels[levelName] = {
-                'name': curNode['name'],
-                'attrName': attrName
-              };
-              break;
-            }
-          }
-        }
-      }
-      if (curNode.hasOwnProperty('children')) {
-        for (const child of curNode['children'].filter(x => x['type'] === 'element')) {
-          remaining.push(child);
-        }
-      }
-    } else {
-      break;
-    }
-  }
-  console.log(levels);
-  return levels;
-}
-
-function cleanGreekText(greekText) {
-  // break Greek text into HTML entity parts and betacode parts, then run
-  // appropriate decoding before stringing everything back together
-  let result = [];
-  let ampPos = -1;
-  let semiPos = -1;
-  let lastPos = 0;
-  for (let i = 0; i < greekText.length; i++) {
-    if (greekText[i] === '&') {
-      // we found the beginning of the HTML entity
-      ampPos = i;
-    } else if (greekText[i] === ';') {
-      // we found the end of the HTML entity
-      semiPos = i;
-    }
-    if (ampPos >= 0 && semiPos >= 0) {
-      if (ampPos !== lastPos) {
-        // there is some Greek that came before the HTML entity that we need to
-        // account for
-        result.push(betaCodeToGreek(greekText.slice(lastPos, ampPos)));
-      }
-      lastPos = semiPos + 1;
-      result.push(he.decode(greekText.slice(ampPos, lastPos)));
-    }
-  }
-  if (lastPos < greekText.length) {
-    // there is some Greek left in the string that needs to be accounted for
-    result.push(betaCodeToGreek(greekText.slice(lastPos)));
-  }
-  return result.join('');
-}
-
-function cleanLatinText(latinText) {
-  return he.decode(latinText);
-}
-
-function extractTextData(node, textIsGreek) {
-  // depth first search
-  let result = [];
-  let workstack = [node];
-  while (workstack.length > 0) {
-    let curNode = workstack.pop();
-    if (curNode.hasOwnProperty('type')) {
-      if (curNode['type'] === 'element' && (curNode['name'] === 'foreign' || curNode['name'] === 'quote')) {
-        if (!textIsGreek && 'lang' in curNode['attributes'] && curNode['attributes']['lang'] === 'greek') {
-          result.push(extractTextData(curNode, true));
-        } else if (textIsGreek && 'lang' in curNode['attributes'] && curNode['attributes']['lang'] !== 'greek') {
-          result.push(extractTextData(curNode, false));
-        }
-      } else if (curNode['type'] === 'text') {
-        const curNodeText = curNode['text'].trim();
-        if (textIsGreek) {
-          result.push(cleanGreekText(curNodeText));
-        } else {
-          result.push(cleanLatinText(curNodeText));
-        }
-      }
-    }
-    if (curNode.hasOwnProperty('children')) {
-      for (const child of curNode['children'].map(x => x).reverse()) {
-        workstack.push(child);
-      }
-    }
-  }
-  return result.join(' ');
-}
-
-function tessify(text, tagName, levelsInfo, presumedStructure, textIsGreek) {
-  // assumed:  the keys of levelsInfo are all lowercased
-  // assumed:  the strings in presumedStructure are already lowercased
-  let levelPosition = 0;
-  let workStack = [text];
-  let result = '';
-  let foundNs = presumedStructure.map(x => 0);
-  while (workStack.length > 0) {
-    let curNode = workStack.pop();
-    if (curNode.hasOwnProperty('children')) {
-      for (const child of curNode['children'].map(x => x).reverse()) {
-        // depth first search
-        workStack.push(child);
-      }
-    }
-    if (curNode['type'] === 'element') {
-      let curNodeName = curNode['name'];
-      let levelName = presumedStructure[levelPosition];
-      let levelNodeName = levelsInfo[levelName]['name'];
-      let levelAttrName = levelsInfo[levelName]['attrName'];
-      if (curNodeName === levelNodeName && (levelAttrName === null || curNode['attributes'][levelAttrName].toLowerCase() === levelName)) {
-        // we've found a structure of a level to dig into
-        if (curNode.hasOwnProperty('attributes') && 'n' in curNode['attributes']) {
-          foundNs[levelPosition] = curNode['attributes']['n'];
-        } else {
-          foundNs[levelPosition] = String(Number(foundNs[levelPosition]) + 1);
-        }
-        if (levelPosition + 1 < presumedStructure.length) {
-          // let's look for the next level
-          levelPosition += 1;
-        } else {
-          // we're ready to make another line in the .tess file
-          result += '<' + tagName + ' ' + foundNs.join('.') + '>\t' + extractTextData(curNode, textIsGreek) + '\n';
-        }
-      } else {
-        // let's see if we've come to the next structure of any of the previous
-        // levels
-        for (let i = levelPosition - 1; i >= 0; i--) {
-          let tmpLevelName = presumedStructure[i];
-          let tmpLevelNodeName = levelsInfo[tmpLevelName]['name'];
-          let tmpLevelAttrName = levelsInfo[tmpLevelName]['attrName'];
-          if (curNodeName === tmpLevelNodeName && (tmpLevelAttrName === null || curNode['attributes'][tmpLevelAttrName].toLowerCase() === tmpLevelName)) {
-            // we are at a next structure
-            foundNs[i] = String(Number(foundNs[i]) + 1);
-            for (let j = i + 1; j < foundNs.length; j++) {
-              // reset the counters for succeeding levels
-              foundNs[j] = String(0);
-            }
-            // resume looking for substructures
-            levelPosition = i + 1;
-            break;
-          }
-        }
-      }
-    }
-  }
-  return result;
-}
+import * as parsing from '../parsing.js';
 
 function destroyClickedElement(event) {
   document.body.removeChild(event.target);
+}
+
+function cleanName(name) {
+  let result = name.toLowerCase();
+  if (name[name.length - 1] !== '.') {
+    result = result + '.';
+  }
+  return result;
 }
 
 class Preparator extends React.Component {
@@ -261,14 +18,17 @@ class Preparator extends React.Component {
     super(props);
     this.state = {
       tessContents: '',
-      presumedStructureDisplay: '',
-      textName: ''
+      authorName: '',
+      textName: '',
+      presumedStructure: '',
+      structure: []
     };
 
     this.loadFile = this.loadFile.bind(this);
     this.postLoad = this.postLoad.bind(this);
     this.updateTessContents = this.updateTessContents.bind(this);
     this.updateTextName = this.updateTextName.bind(this);
+    this.updateAuthorName = this.updateAuthorName.bind(this);
     this.updatePresumedStructure = this.updatePresumedStructure.bind(this);
     this.convert = this.convert.bind(this);
     this.saveDoc = this.saveDoc.bind(this);
@@ -284,14 +44,14 @@ class Preparator extends React.Component {
   }
 
   postLoad(e) {
-    let parsedObj = getParsedObj(e.target.result);
-    let structures = getStructures(parsedObj);
+    const parsedObj = parsing.getParsedObj(e.target.result);
+    const structure = parsing.getCTSStructure(parsedObj);
     this.setState({
       parsedObj: parsedObj,
-      title: getTitle(parsedObj),
-      texts: getTexts(parsedObj),
-      structures: structures,
-      presumedStructureDisplay: structures[0].join('.')
+      authorName: cleanName(parsing.getAuthorAbbreviation(parsedObj)),
+      textName: cleanName(parsing.getTitleAbbreviation(parsedObj)),
+      structure: structure,
+      presumedStructure: structure.join('.')
     });
     console.log(this.state);
   }
@@ -301,32 +61,37 @@ class Preparator extends React.Component {
   }
 
   updateTextName(event) {
-    this.setState({ textName: event.target.value });
+    this.setState({ textName: cleanName(event.target.value) });
+  }
+
+  updateAuthorName(event) {
+    this.setState({ authorName: cleanName(event.target.value) });
   }
 
   updatePresumedStructure(event) {
     this.setState({
-      presumedStructureDisplay: event.target.value
+      presumedStructure: event.target.value,
+      structure: event.target.value.split('.')
     });
   }
 
   convert() {
-    //
-    let finalContents = [];
-    // TODO should this be user indicated?
-    const isGreek = getPrimaryLanguage(this.state.parsedObj) === 'greek';
-    for (const text of this.state.texts) {
-      const presumedStructure = this.state.presumedStructureDisplay.split('.');
-      const levelsInfo = getLevelsInfo(text, presumedStructure);
-      finalContents.push(tessify(text, this.state.textName, levelsInfo, presumedStructure, isGreek));
-    }
-    this.setState({ tessContents: finalContents.join('\n') });
+    this.setState({
+      tessContents: parsing.makeTess(
+        this.state.parsedObj,
+        this.state.authorName,
+        this.state.textName,
+        this.state.structure
+      )
+    });
   }
 
   saveDoc() {
     const text = this.state.tessContents;
     const blob = new Blob([text], { type: 'text/plain' });
-    const filename = 'default.tess';
+    const authorPart = this.state.authorName;
+    const textPart = this.state.textName;
+    const filename = authorPart + textPart + 'tess';
     var downloadLink = document.createElement('a');
     downloadLink.download = filename;
     downloadLink.innerHTML = 'Download File';
@@ -351,11 +116,13 @@ class Preparator extends React.Component {
       <div key='inputDiv'><input type='file' id='toBeConverted' ref={this.fileInput} onChange={this.loadFile} /></div>,
       <div key='optionsDiv'>
         <div>
+          <label htmlFor='authorName'>Author Abbreviation:</label>
+          <input type='text' id='authorName' value={this.state.authorName} onChange={this.updateAuthorName} />
+        </div>
+        <div>
           <label htmlFor='textName'>Text Name Abbreviation:</label>
           <input type='text' id='textName' value={this.state.textName} onChange={this.updateTextName} />
         </div>
-        <label htmlFor='presumedStructure'>Presumed Structure:</label>
-        <input type='text' id='presumedStructure' value={this.state.presumedStructureDisplay} onChange={this.updatePresumedStructure} />
         <div>
           <input type='button' id='convertButton' onClick={this.convert} value='Convert' />
         </div>
