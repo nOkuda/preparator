@@ -1,0 +1,31 @@
+{
+  "name": "preparator",
+  "version": "1.0.0",
+  "description": "",
+  "main": ".eslintrc.js",
+  "scripts": {
+    "build": "neutrino build",
+    "start": "neutrino start",
+    "lint": "neutrino lint",
+    "test": "neutrino test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@neutrinojs/jest": "^8.3.0",
+    "@neutrinojs/react-components": "^8.3.0",
+    "@neutrinojs/standardjs": "^8.3.0",
+    "neutrino": "^8.3.0",
+    "prop-types": "^15.7.2",
+    "react-devtools": "^3.6.2"
+  },
+  "dependencies": {
+    "@rgrove/parse-xml": "^2.0.1",
+    "beta-code-js": "^1.0.6",
+    "he": "^1.2.0",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "source-map-support": "^0.5.12"
+  }
+}
