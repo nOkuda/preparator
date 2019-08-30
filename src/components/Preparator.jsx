@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import React from 'react';
 import * as parsing from '../parsing.js';
 
@@ -5,12 +6,8 @@ function destroyClickedElement(event) {
   document.body.removeChild(event.target);
 }
 
-function cleanName(name) {
-  let result = name.toLowerCase();
-  if (name[name.length - 1] !== '.') {
-    result = result + '.';
-  }
-  return result;
+function prepareSaveNamePart(name) {
+  return _.kebabCase(name);
 }
 
 class Preparator extends React.Component {
@@ -49,8 +46,8 @@ class Preparator extends React.Component {
     this.setState({
       tessContents: '',
       parsedObj: parsedObj,
-      authorName: cleanName(parsing.getAuthorAbbreviation(parsedObj)),
-      textName: cleanName(parsing.getTitleAbbreviation(parsedObj)),
+      authorName: parsing.getAuthorAbbreviation(parsedObj),
+      textName: parsing.getTitleAbbreviation(parsedObj),
       structure: structure,
       presumedStructure: structure.join('.')
     });
@@ -62,11 +59,11 @@ class Preparator extends React.Component {
   }
 
   updateTextName(event) {
-    this.setState({ textName: cleanName(event.target.value) });
+    this.setState({ textName: event.target.value });
   }
 
   updateAuthorName(event) {
-    this.setState({ authorName: cleanName(event.target.value) });
+    this.setState({ authorName: event.target.value });
   }
 
   updatePresumedStructure(event) {
@@ -90,9 +87,12 @@ class Preparator extends React.Component {
   saveDoc() {
     const text = this.state.tessContents;
     const blob = new Blob([text], { type: 'text/plain' });
-    const authorPart = this.state.authorName;
-    const textPart = this.state.textName;
-    const filename = authorPart + textPart + 'tess';
+    const filenameParts = [
+      prepareSaveNamePart(this.state.authorName),
+      prepareSaveNamePart(this.state.textName),
+      'tess'
+    ]
+    const filename = filenameParts.join('.');
     var downloadLink = document.createElement('a');
     downloadLink.download = filename;
     downloadLink.innerHTML = 'Download File';
