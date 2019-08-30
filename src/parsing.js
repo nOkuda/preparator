@@ -5,14 +5,18 @@ export function getParsedObj(xmlString) {
     ignoreUndefinedEntities: true
   };
   const newlinesBetweenTags = />\s+</gm;
+  const remainingNewlines = /\n+/gm;
+  const multispace = /\s+/gm;
   const selfClosingTags = /<[^>]*?\/>/gm;
-  const beginQuote = /<q.*?>/gm;
-  const endQuote = /<\/q.*?>/gm;
+  const beginQuote = /<q.*?>\s*/gm;
+  const endQuote = /\s*<\/q.*?>/gm;
   const processed = xmlString
     // parse-xml retained inter-tag newlines as text nodes
     .replace(newlinesBetweenTags, '><')
+    .replace(remainingNewlines, ' ')
     // we don't need self closing tags
     .replace(selfClosingTags, '')
+    .replace(multispace, ' ')
     .replace(beginQuote, '“')
     .replace(endQuote, '”');
   let parsedObj = parseXml(processed, parserOptions);
@@ -42,17 +46,25 @@ export function traversePath(parsedObj, path) {
 
 export function getTitleAbbreviation(parsedObj) {
   const path = ['TEI', 'teiHeader', 'fileDesc', 'titleStmt', 'title'];
-  for (const titleNode of traversePath(parsedObj, path)) {
-    if (titleNode['attributes']['type'] === 'work') {
-      return titleNode['attributes']['n'];
+  const titleNodesFound = traversePath(parsedObj, path);
+  const worksFound = titleNodesFound.filter(x => 'attributes' in x && 'type' in x['attributes'] && x['attributes']['type'] === 'work');
+  if (worksFound.length > 0) {
+    const firstWork = worksFound[0];
+    if ('n' in firstWork['attributes']) {
+      return worksFound[0]['attributes']['n'];
     }
+    return extractNodeText(firstWork);
   }
+  return extractNodeText(titleNodesFound[0]);
 }
 
 export function getAuthorAbbreviation(parsedObj) {
   const path = ['TEI', 'teiHeader', 'fileDesc', 'titleStmt', 'author'];
   const firstAuthor = traversePath(parsedObj, path)[0];
-  return firstAuthor['attributes']['n'];
+  if ('attributes' in firstAuthor && 'n' in firstAuthor['attributes']) {
+    return firstAuthor['attributes']['n'];
+  }
+  return extractNodeText(firstAuthor);
 }
 
 export function getCTSStructure(parsedObj) {
@@ -87,9 +99,12 @@ export function buildParts(curNode, tagPrefix, structure, levelIndex) {
   let tessChunks = [];
   const nextLevel = levelIndex + 1;
   if (nextLevel === structure.length) {
-    return buildUnit(curNode, tagPrefix);
+    return buildUnit(curNode, tagPrefix, levelIndex);
   }
   for (const child of curNode['children']) {
+    if (child['name'] !== 'l' && child['name'] !== 'div') {
+      continue;
+    }
     let curPrefix = '';
     if (levelIndex > 0) {
       curPrefix = tagPrefix + curNode['attributes']['n'] + '.';
@@ -101,10 +116,17 @@ export function buildParts(curNode, tagPrefix, structure, levelIndex) {
   return tessChunks.join('\n');
 }
 
-export function buildUnit(unitNode, tagPrefix) {
+export function buildUnit(unitNode, tagPrefix, levelIndex) {
+  const unitDesignation = unitNode['attributes']['n'];
+  if (levelIndex > 0) {
+    return '<' + tagPrefix + unitDesignation + '>' + '\t' + extractNodeText(unitNode);
+  }
+  return '<' + tagPrefix + ' ' + unitDesignation + '>' + '\t' + extractNodeText(unitNode);
+}
+
+export function extractNodeText(unitNode) {
   let result = [];
   let workStack = [];
-  const unitDesignation = unitNode['attributes']['n'];
   populateWorkStack(unitNode, workStack);
   while (workStack.length > 0) {
     const curNode = workStack.pop();
@@ -114,7 +136,7 @@ export function buildUnit(unitNode, tagPrefix) {
       populateWorkStack(curNode, workStack);
     }
   }
-  return '<' + tagPrefix + unitDesignation + '>' + '\t' + result.join(' ');
+  return result.map(x => x.trim()).join(' ');
 }
 
 export function populateWorkStack(node, workStack) {

@@ -47,6 +47,7 @@ class Preparator extends React.Component {
     const parsedObj = parsing.getParsedObj(e.target.result);
     const structure = parsing.getCTSStructure(parsedObj);
     this.setState({
+      tessContents: '',
       parsedObj: parsedObj,
       authorName: cleanName(parsing.getAuthorAbbreviation(parsedObj)),
       textName: cleanName(parsing.getTitleAbbreviation(parsedObj)),
@@ -134,7 +135,5 @@ class Preparator extends React.Component {
     ];
   }
 }
-
-// TODO allow user selection of presumedStructure based on structures found
 
 export default Preparator;
