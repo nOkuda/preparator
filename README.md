@@ -4,11 +4,11 @@ Preparator is a browser-based tool that helps users convert Perseus Project XML 
 
 ### Using Preparator
 
-Once Preparator has loaded in your web browser, you should see a few buttons, a few text fields, and a text area.  Clicking the topmost button allows you to load up a Perseus XML file into Preparator.  Once the XML file is chosen, the text fields should be automatically populated.  If you would like to make any changes to the text fields, you can do so, with the restriction that only lower case letters are allowed and that the chosen abbreviation must end with a period (.).
+Once Preparator has loaded in your web browser, you should see a few buttons, a few text fields, and a text area.  Clicking the topmost button allows you to load up a Perseus XML file into Preparator.  Once the XML file is chosen, the text fields should be automatically populated.  If you would like to make any changes to the text fields, you can do so.
 
 When you are happy with the text fields, you can push the "Convert" button to make Preparator generate the lines of a .tess file from your chosen Perseus XML file.  Note that every line contains the abbreviations you chose earlier.  If you are unsatisfied with the abbreviations, you can change them up in the text fields and push the "Convert" button again to update the lines of the .tess file.
 
-When you are happy with how the lines look, you can push the "Save" button to save the .tess file to your computer.  Note that the default name of the .tess file is the author abbreviation followed by the text abbreviation.
+When you are happy with how the lines look, you can push the "Save" button to save the .tess file to your computer.  Note that the default name of the .tess file is based off of the author abbreviation followed by the text abbreviation.
 
 ### Obtaining the Correct XML files
 
@@ -35,3 +35,7 @@ cd preparator
 npm install
 npm start
 ```
+
+#### Hosting
+
+For now, use neutrino's create-project script to build a react website with [neutrinojs/react](https://neutrinojs.org/packages/react/).  To integrate Preparator into the react website, copy the files from this repository's `src` directory into the react website's `src` directory, and make the appropriate imports in the react website (the main file is `src/index.js`).  After successfully building the react website with `npm run build`, copy the files located in the `build` directory to a location where you can serve the files.
