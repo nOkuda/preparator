@@ -6,19 +6,23 @@ export function getParsedObj(xmlString) {
   };
   const newlinesBetweenTags = />\s+</gm;
   const remainingNewlines = /\n+/gm;
-  const multispace = /\s+/gm;
   const selfClosingTags = /<[^>]*?\/>/gm;
+  const delTags = /<del>.*?<\/del>/gm;
+  const addTags = /<add>(.*?)<\/add>/gm;
   const beginQuote = /<q.*?>\s*/gm;
   const endQuote = /\s*<\/q.*?>/gm;
+  const multispace = /\s+/gm;
   const processed = xmlString
     // parse-xml retained inter-tag newlines as text nodes
     .replace(newlinesBetweenTags, '><')
     .replace(remainingNewlines, ' ')
     // we don't need self closing tags
     .replace(selfClosingTags, '')
-    .replace(multispace, ' ')
+    .replace(delTags, '')
+    .replace(addTags, '$1')
     .replace(beginQuote, '“')
-    .replace(endQuote, '”');
+    .replace(endQuote, '”')
+    .replace(multispace, ' ');
   let parsedObj = parseXml(processed, parserOptions);
   return parsedObj;
 }

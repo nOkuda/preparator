@@ -584,3 +584,116 @@ test('eliminate unnecessary whitespace 2', () => {
   ]
   expect(tessLines).toEqual(expecteds);
 })
+
+test('add and delete tags', () => {
+  const xmlLines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<?xml-model href="http://www.stoa.org/epidoc/schema/8.21/tei-epidoc.rng"',
+    '    schematypens="http://relaxng.org/ns/structure/1.0"?>',
+    '<?xml-model href="http://www.stoa.org/epidoc/schema/8.21/tei-epidoc.rng"',
+    '    schematypens="http://purl.oclc.org/dsdl/schematron"?>',
+    '<TEI xmlns="http://www.tei-c.org/ns/1.0">',
+    '	<teiHeader>',
+    '		<fileDesc>',
+    '			<titleStmt>',
+    '				<title type="work">De Medicina</title>',
+    '				<title type="sub">Machine readable text</title>',
+    '				<author>Celsus</author>',
+    '				<editor role="editor" n="Marx">Friedrich Marx</editor>',
+    '				<sponsor>Perseus Project, Tufts University</sponsor>',
+    '		<principal>Gregory Crane</principal>',
+    '		<respStmt>',
+    '		<resp>Prepared under the supervision of</resp>',
+    '		<name>Bridget Almas</name>',
+    '		<name>Lisa Cerrato</name>',
+    '		<name>Rashmi Singhal</name>',
+    '		</respStmt>',
+    '				<funder n="org:Tufts">Tufts University</funder>',
+    '			</titleStmt>',
+    '			<extent/>',
+    '			<publicationStmt>',
+    '		<publisher>Trustees of Tufts University</publisher>',
+    '		<pubPlace>Medford, MA</pubPlace>',
+    '		<authority>Perseus Project</authority>',
+    '				<date type="release">2009-10-07</date>',
+    '		</publicationStmt>',
+    '			<sourceDesc>',
+    '				<biblStruct>',
+    '					<monogr>',
+    '						<title>A. Cornelii Celsi quae supersunt</title>',
+    '						<author>Celsus</author>',
+    '						<editor role="editor" n="Marx">Friedrich Marx</editor>',
+    '						<imprint>',
+    '							<pubPlace>Lipsiae</pubPlace>',
+    '							<publisher>Teubner</publisher>',
+    '							<date>1915</date>',
+    '						</imprint>',
+    '					</monogr>',
+    '				</biblStruct>',
+    '			</sourceDesc>',
+    '		</fileDesc>',
+    '		',
+    '		<encodingDesc>',
+    '			<refsDecl> ',
+    '				<refState unit="book"/>',
+    '				<refState unit="chapter" n="chunk"/>',
+    '				<refState unit="section"/>',
+    '			</refsDecl> ',
+    '			<!--<refsDecl> ',
+    '				<state unit="page"/> ',
+    '				</refsDecl>--> ',
+    '	         <refsDecl n="CTS">',
+    '	            <cRefPattern n="chapter"',
+    '	                         matchPattern="(\\w+).(\\w+)"',
+    '	                         replacementPattern="#xpath(/tei:TEI/tei:text/tei:body/tei:div/tei:div[@n=\'$1\']/tei:div[@n=\'$2\'])">',
+    '	                <p>This pointer pattern extracts book and chapter</p>',
+    '	            </cRefPattern>',
+    '	            <cRefPattern n="book"',
+    '	                         matchPattern="(\\w+)"',
+    '	                         replacementPattern="#xpath(/tei:TEI/tei:text/tei:body/tei:div/tei:div[@n=\'$1\'])">',
+    '	                <p>This pointer pattern extracts book</p>',
+    '	            </cRefPattern>',
+    '	        </refsDecl>',
+    '		</encodingDesc>',
+    '		',
+    '		<profileDesc>',
+    '			<langUsage>',
+    '				<language ident="lat">Latin</language>',
+    '				<language ident="greek">Greek</language>',
+    '			</langUsage>',
+    '		</profileDesc>',
+    '		<revisionDesc>',
+    '			<change when="2009-01-01" who="GRC">Tagging</change>',
+    '			<change when="2016-11-16" who="Thibault Clerice">CapiTainS, Epidoc, Bump</change>',
+    '		</revisionDesc>',
+    '	</teiHeader>',
+    '	',
+    '	<text>',
+    '		<body>',
+    '			<div type="edition" n="urn:cts:latinLit:phi0836.phi002.perseus-lat6" xml:lang="lat">',
+    '',
+    '			<pb n="p.17"/>',
+    '			<div type="textpart" subtype="book" n="1">',
+    '				<div type="textpart" subtype="chapter" n="pr">',
+    '						<milestone unit="section" n="12"/>Quoniam autem ex <del>tribus</del> medicinae partibus ut difficillima, sic etiam clarissima est ea, quae morbis medetur, ante omnia de hac dicendum est. Et quia prima in e<add>o</add> dissensio est, quod alii sibi experimentorum tantummodo notitiam necessariam esse contendunt, alii nisi corporum rerumque ratione comperta non satis potentem usum esse proponunt, indicandum est, quae maxime ex utraque parte dicantur, quo facilius nostra quoque opinio interponi possit.',
+    '    </div></div></div></body></text></TEI>',
+  ]
+
+  const xmlString = xmlLines.join('\n');
+  const parsedObj = parsing.getParsedObj(xmlString);
+
+  const title = parsing.getTitleAbbreviation(parsedObj);
+  expect(title).toEqual('De Medicina');
+
+  const author = parsing.getAuthorAbbreviation(parsedObj);
+  expect(author).toEqual('Celsus');
+
+  const structure = parsing.getCTSStructure(parsedObj);
+  expect(structure).toEqual(['book', 'chapter']);
+
+  const tessLines = parsing.makeTess(parsedObj, 'Cels.', 'Med.', structure).split('\n');
+  const expecteds = [
+    '<Cels. Med. 1.pr>	Quoniam autem ex medicinae partibus ut difficillima, sic etiam clarissima est ea, quae morbis medetur, ante omnia de hac dicendum est. Et quia prima in eo dissensio est, quod alii sibi experimentorum tantummodo notitiam necessariam esse contendunt, alii nisi corporum rerumque ratione comperta non satis potentem usum esse proponunt, indicandum est, quae maxime ex utraque parte dicantur, quo facilius nostra quoque opinio interponi possit.'
+  ]
+  expect(tessLines).toEqual(expecteds);
+})
